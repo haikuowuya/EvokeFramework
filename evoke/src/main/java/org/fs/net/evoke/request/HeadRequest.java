@@ -9,6 +9,7 @@ import com.squareup.okhttp.OkUrlFactory;
 import org.fs.net.evoke.DownloadManager;
 import org.fs.net.evoke.data.HeadObject;
 import org.fs.net.evoke.data.PartObject;
+import org.fs.net.evoke.data.RequestObject;
 import org.fs.net.evoke.listener.HeadCallback;
 import org.fs.net.evoke.listener.PartCallback;
 import org.fs.net.evoke.th.NamedRunnable;
@@ -42,6 +43,8 @@ public class HeadRequest extends NamedRunnable {
     private final static String HTTPS   = "https";
     
     private final static String METHOD  = "HEAD";
+    
+    private final int connectionTimeout = 10000;
 
     /**
      * We have our client as static for good. 
@@ -54,6 +57,7 @@ public class HeadRequest extends NamedRunnable {
     private final String urlString;
     private final HeadCallback callback;
     private final File  base;    
+    private final RequestObject requestObject;
     
     private long downloadedSoFar;
     private long total;
@@ -63,17 +67,18 @@ public class HeadRequest extends NamedRunnable {
     private final Map<Integer, Future<?>> cancelable;
      
     //buffer for 1 mb used for invoking streams 
-    private final static long MAX_BUFFER = Util.pow(1024, 2);
+    private final static long MAX_BUFFER = 1024 * 1024;
     
-    public HeadRequest(final String urlString, final File base, final HeadCallback callback) {
-        super("-H %s", urlString);
-        this.urlString = urlString;
+    public HeadRequest(final File base, final HeadCallback callback, final RequestObject requestObject) {
+        super("-H %s", requestObject.toString());
+        this.urlString = requestObject.getUrlString();
         this.base = base;
         this.callback = callback;
+        this.requestObject = requestObject;
         
         throwIfUrlNotValid();        
-        executorService = new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60, TimeUnit.SECONDS,
-                new LinkedBlockingQueue<Runnable>(), Util.threadFactory(String.format("-H %s Pool", getName()), false));
+        executorService = new ThreadPoolExecutor(0, Integer.MAX_VALUE, (connectionTimeout / 1000), TimeUnit.SECONDS,
+                new LinkedBlockingQueue<Runnable>(), Util.threadFactory(String.format("-P %s", getName()), false));
         cancelable = new HashMap<>();
     }
 
@@ -172,25 +177,30 @@ public class HeadRequest extends NamedRunnable {
     }
 
     /**
+     *
      * Creates part objects in 1 mb buffers. 
      * @param start start position of part. 0 default. 
      * @param headObject
+     * @param length end size of download
      * @return
      */
-     private List<PartObject> share(HeadObject headObject, long start) {
+    private List<PartObject> share(HeadObject headObject, long start, long length) {
         List<PartObject> parts = new ArrayList<>();
-        for(; start < headObject.getLength(); start+= MAX_BUFFER) {
+        if(length < 0) {
+            length = headObject.getLength();
+        }
+        for(; start < length; start+= MAX_BUFFER) {
             PartObject.Builder builder = new PartObject.Builder();
             builder.file(new File(base, headObject.getName()))
-                   .range(String.format("bytes=%d-%d", start,
-                           (start + MAX_BUFFER >= headObject.getLength()
-                                   ? headObject.getLength() - 1
-                                   : start + MAX_BUFFER - 1)))
-                   .urlString(headObject.getRemote());
+                    .range(String.format("bytes=%d-%d", start,
+                            (start + MAX_BUFFER >= headObject.getLength()
+                                    ? headObject.getLength() - 1
+                                    : start + MAX_BUFFER - 1)))
+                    .urlString(headObject.getRemote());
             parts.add(builder.build());
         }
         return parts;
-     }
+    }
 
     /**
      * main entry point.
@@ -201,54 +211,43 @@ public class HeadRequest extends NamedRunnable {
         try {
             connection.setRequestMethod(METHOD);
             connection.setRequestProperty(userAgent.first, userAgent.second);
-            connection.setConnectTimeout(5000);//5 secs time-out
-            //connect
+            connection.setConnectTimeout(connectionTimeout);
             connection.connect();
             int code = connection.getResponseCode();            
             if(code == 200) {
-                //create data from this.
-                String serverSupportsPartialDownloads = connection.getHeaderField("Accept-Ranges");//if this is null 
+                String serverSupportsPartialDownloads = connection.getHeaderField("Accept-Ranges");
                 if(!StringUtility.isNullOrEmpty(serverSupportsPartialDownloads)
                         && "bytes".equalsIgnoreCase(serverSupportsPartialDownloads)) {
-                    //get useful parts.
                     HeadObject.Builder builder = new HeadObject.Builder();
                     builder.contentType(connection.getContentType())
                            .name(getName())
                            .length(connection.getContentLength())
                            .remote(urlString);
-
                     HeadObject headObject = builder.build();
-
-                    //check if exists
                     File file = new File(base, getName());
                     if (file.exists()) {
-                        boolean alreadyDownloaded = connection.getContentLength() == file.length();
+                        boolean alreadyDownloaded = connection.getContentLength() == file.length()
+                                                 || requestObject.getLimit() == file.length();
                         if (alreadyDownloaded) {
-                            //file already remains in the storage must have been downloaded.
                             callback.onComplete(hashCode(), file);
                         } else {
-                            //resume
-                            startWithParts(share(headObject, file.length()));   
+                            startWithParts(share(headObject, file.length(), requestObject.getLimit()));
                             total = connection.getContentLength();
                             downloadedSoFar = file.length();
                             callback.onProgress(hashCode(), downloadedSoFar, total);
                         }
                     } else {
-                        //start new
-                        startWithParts(share(headObject, 0));
+                        startWithParts(share(headObject, 0, requestObject.getLimit()));
                         total = connection.getContentLength();
                         downloadedSoFar = 0;
                         callback.onProgress(hashCode(), downloadedSoFar, total);
                     }
                 } else {
-                    //remote does not support partial download...
                     callback.onError(hashCode(), urlString, DownloadManager.ERROR_PARTIAL_NOT_SUPPORTED);
                 }
             } else {
                 callback.onError(hashCode(), urlString, DownloadManager.ERROR_SERVER_CODE);
-                //failed notify user that this is not valid type of file we can partition on it. 
-                //this is non-200 code so check it later
-            }                
+            }
             connection.disconnect();
         } catch (Exception e) {
             if(isLogEnabled()) {
@@ -265,21 +264,24 @@ public class HeadRequest extends NamedRunnable {
         if(cancelable != null && cancelable.size() > 0) {
             for(int key : cancelable.keySet()) {
                 Future<?> future = cancelable.remove(key);
-                future.cancel(true);//interrupt these
+                future.cancel(true);
             }
         }
         if(cleanUpSoFar) {
             File file = new File(base, getName());
             if(file.exists()) {
                 file.delete();
-                //this is cancel
-                callback.onProgress(-1, downloadedSoFar, total);
             }
         } else {
-            //this is pause
-            callback.onProgress(-2, downloadedSoFar, total);
-            callback.onComplete(-2, new File(base, getName()));//downloaded so far.
+            callback.onError(hashCode(), requestObject.getUrlString(), DownloadManager.ERROR_PART_CANCELED);
         }
+    }
+
+    /**
+     * default destroy 
+     */
+    public void destroy() {
+        destroy(false);        
     }
 
     /**
@@ -289,26 +291,48 @@ public class HeadRequest extends NamedRunnable {
     private void startWithParts(List<PartObject> parts) {
         if (parts != null && parts.size() > 0) {
             for (PartObject part : parts) {
-                PartRequest partRequest = new PartRequest(part, new PartCallback() {                   
-                    @Override
-                    public void onPartCompleted(long size, int id) {
-                        cancelable.remove(id);
-                        if(size == -1) {
-                            //this is interrupted thread.    
-                        } else {
-                            //normal life cycle of thread.
-                            downloadedSoFar += size;
-                        }
-                        callback.onProgress(HeadRequest.this.hashCode(), downloadedSoFar, total);
-                        if (downloadedSoFar == total) {
-                            //complete callback
-                            callback.onComplete(HeadRequest.this.hashCode(), new File(base, getName()));
-                        }
-                    }
-                });
+                PartRequest partRequest = new PartRequest(part, partCallback);
                 Future<?> future = executorService.submit(partRequest);
                 cancelable.put(partRequest.hashCode(), future);
             }
         }
     }
+
+    /**
+     * Callback for parts.
+     */
+    private final PartCallback partCallback = new PartCallback() {
+        @Override
+        public void onPartCompleted(long size, int id) {
+            if(DownloadManager.ERROR_PART_CANCELED == size) {
+                callback.onError(HeadRequest.this.hashCode(), requestObject.getUrlString(), DownloadManager.ERROR_PART_CANCELED);
+            }
+            else if(DownloadManager.ERROR_PART_SERVER_CODE == size) {
+                callback.onError(HeadRequest.this.hashCode(), requestObject.getUrlString(), DownloadManager.ERROR_PART_SERVER_CODE);
+            }
+            else if(DownloadManager.ERROR_PART_UNKNOWN == size) {
+                callback.onError(HeadRequest.this.hashCode(), requestObject.getUrlString(), DownloadManager.ERROR_PART_UNKNOWN);
+            }
+            else {
+                callback.onProgress(HeadRequest.this.hashCode(), downloadedSoFar, total);
+                if (downloadedSoFar == total) {
+                    if(requestObject.getMoveTo() != null) {
+                        File cache = new File(base, getName());
+                        boolean moved = cache.renameTo(requestObject.getMoveTo());
+                        if(!moved) {
+                            moved = Util.move(cache, requestObject.getMoveTo());
+                            if(!moved) {
+                                throw new IllegalArgumentException("cant move file to destination.");
+                            } else {
+                                callback.onComplete(HeadRequest.this.hashCode(), requestObject.getMoveTo());
+                            }
+                        }
+                    } else {
+                        callback.onComplete(HeadRequest.this.hashCode(), new File(base, getName()));
+                    }
+                }
+            }
+            cancelable.remove(id);        
+        }
+    };
 }

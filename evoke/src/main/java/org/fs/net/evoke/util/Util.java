@@ -1,5 +1,8 @@
 package org.fs.net.evoke.util;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.util.concurrent.ThreadFactory;
 
 /**
@@ -26,6 +29,32 @@ public final class Util {
         } else  {
             return x * pow(x, n - 1);
         }
+    }
+
+    /**
+     * Copy file a to b and remove a. 
+     * @param source source file
+     * @param destination destination file
+     * @return true if success, false if fail.
+     */
+    public static boolean move(File source, File destination) {
+        try {
+            FileInputStream in = new FileInputStream(source);
+            FileOutputStream out = new FileOutputStream(destination);
+            byte[] buffer = new byte[1024 * 1024];
+            int size;
+            while ((size = in.read(buffer)) >= 0) {
+                out.write(buffer, 0, size);
+            }
+            in.close();
+            out.flush();
+            out.close();            
+            source.delete();
+            return true;
+        } catch (Exception exp) {
+            exp.printStackTrace();   
+        }        
+        return false;
     }
     
     /**

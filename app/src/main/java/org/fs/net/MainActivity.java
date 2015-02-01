@@ -14,7 +14,7 @@ import org.fs.net.evoke.DownloadManager;
 public class MainActivity extends Activity {
 
     
-    private String urlString = "http://cdn.liverail.com/adasset4/20213/78215/251804/hi.mp4";//"http://onurodulkart.com/OnurMarketPanel/Pdf/635574243161639286_2201_04022015_insert.pdf";
+    private String urlString = "";
        
     ImageView imageView;
     
@@ -25,18 +25,6 @@ public class MainActivity extends Activity {
         setContentView(imageView);
 
         DownloadManager downloadManager = DownloadManager.getInstance(this);
-        //downloadManager.start(Uri.parse(urlString));
-        downloadManager.start(Uri.parse("http://cdn.liverail.com/adasset4/20213/74193/250304/lo.mp4"));
-        downloadManager.start(Uri.parse("http://cdn.liverail.com/adasset4/20213/74193/250304/lo.webm"));
-        downloadManager.start(Uri.parse("http://cdn.liverail.com/adasset4/20213/74193/250304/lo.flv"));
-        downloadManager.start(Uri.parse("http://cdn.liverail.com/adasset4/20213/74193/250304/lo.wmv"));
-        downloadManager.start(Uri.parse("http://cdn.liverail.com/adasset4/20213/74193/250304/me.mp4"));
-        downloadManager.start(Uri.parse("http://cdn.liverail.com/adasset4/20213/74193/250304/me.webm"));
-        downloadManager.start(Uri.parse("http://cdn.liverail.com/adasset4/20213/74193/250304/me.flv"));
-        downloadManager.start(Uri.parse("http://cdn.liverail.com/adasset4/20213/74193/250304/me.wmv"));
-        downloadManager.start(Uri.parse("http://cdn.liverail.com/adasset4/20213/74193/250304/hi.mp4"));
-        downloadManager.start(Uri.parse("http://cdn.liverail.com/adasset4/20213/74193/250304/hi.webm"));
-        downloadManager.start(Uri.parse("http://cdn.liverail.com/adasset4/20213/74193/250304/hi.flv"));
-        downloadManager.start(Uri.parse("http://cdn.liverail.com/adasset4/20213/74193/250304/hi.wmv"));
+
     }
 }

@@ -4,6 +4,8 @@ import android.util.Log;
 import android.util.Pair;
 import com.squareup.okhttp.OkHttpClient;
 import com.squareup.okhttp.OkUrlFactory;
+
+import org.fs.net.evoke.DownloadManager;
 import org.fs.net.evoke.data.PartObject;
 import org.fs.net.evoke.listener.PartCallback;
 import org.fs.net.evoke.th.NamedRunnable;
@@ -21,22 +23,29 @@ import java.net.URL;
  * as org.fs.net.evoke.request.PartRequest
  */
 public class PartRequest extends NamedRunnable {
+
+    /**
+     *  this should be executed in 60 secs.
+     */
     
     private final PartObject part;
     private final PartCallback callback;
 
+    private final int connectionTimeout = 10000;
+    private final int readTimeout       = 25000;
+    
     private final static OkHttpClient client  = new OkHttpClient();
     private final static OkUrlFactory factory = new OkUrlFactory(client);
 
     private final static Pair<String, String> userAgent = new Pair<>("User-Agent", "(evoke/1.0) Android OS");
     
-    private final static int MAX_BUFFER = 1024 * Util.pow(2, 7); //128kb write buffer
+    private final static int MAX_BUFFER = 1024 * 1024;
     
     private final static String METHOD = "GET";
     private final static String RANGES = "Range";
     
     public PartRequest(final PartObject part, final PartCallback callback) {
-        super("Part Request %s", part.toString());
+        super("-P %s", part.toString());
         this.part = part;
         this.callback = callback;
     }
@@ -105,28 +114,21 @@ public class PartRequest extends NamedRunnable {
     
     @Override
     protected void execute() {
-        //check the thread name
         if(Thread.interrupted()) {
-            callback.onPartCompleted(-1, hashCode());
-            return;//finish silently.
+            callback.onPartCompleted(DownloadManager.ERROR_PART_CANCELED, hashCode());
+            return;
         }
-        
         HttpURLConnection connection = open();
         try {
             connection.setRequestMethod(METHOD);
             connection.setRequestProperty(userAgent.first, userAgent.second);
             connection.setRequestProperty(RANGES, part.getRange());
-            //timeout defaults
-            connection.setConnectTimeout(10000);
-            connection.setReadTimeout(25000);
-            
+            connection.setConnectTimeout(connectionTimeout);
+            connection.setReadTimeout(readTimeout);
             connection.connect();
-            
             int code = connection.getResponseCode();
             if(code == 206) {
-                //if file size 0 then first output type else put it append mode.
-                //how to make override mode if always open it as append ?
-                FileOutputStream fos = part.getFile().length() == 0 
+                FileOutputStream fos = part.getFile().length() == 0
                                             ? new FileOutputStream(part.getFile())
                                             : new FileOutputStream(part.getFile(), true);
                 
@@ -139,25 +141,19 @@ public class PartRequest extends NamedRunnable {
                 }
                 out.close();
                 is.close();
-                
                 fos.flush();
                 fos.close();
-                
-                //pass the callback
                 callback.onPartCompleted(connection.getContentLength(), hashCode());
             }
             else {
-                //server error
-                callback.onPartCompleted(-1, hashCode());
+                callback.onPartCompleted(DownloadManager.ERROR_PART_SERVER_CODE, hashCode());
             }
-            //close
             connection.disconnect();
-            
         } catch (Exception exp) {
             if(isLogEnabled()) {
                 exp.printStackTrace();
             }
-            callback.onPartCompleted(-1, hashCode());
+            callback.onPartCompleted(DownloadManager.ERROR_PART_UNKNOWN, hashCode());
         }
     }
 }
