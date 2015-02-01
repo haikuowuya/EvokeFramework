@@ -1,10 +1,15 @@
 package org.fs.net;
 
 import android.app.Activity;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.os.Bundle;
 import android.widget.ImageView;
 
 import org.fs.net.evoke.DownloadManager;
+import org.fs.net.evoke.data.Download;
 
 /**
  * Created by Fatih on 28/01/15.
@@ -25,5 +30,20 @@ public class MainActivity extends Activity {
 
         DownloadManager downloadManager = DownloadManager.getInstance(this);
 
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(DownloadManager.ACTION_PROGRESS);
+        filter.addAction(DownloadManager.ACTION_ERROR);
+        filter.addAction(DownloadManager.ACTION_COMPLETE);
+        
+        registerReceiver(broadcast, filter);
+        unregisterReceiver(broadcast);
+        
     }
+    
+    BroadcastReceiver broadcast = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            
+        }
+    };
 }
