@@ -5,7 +5,6 @@ import android.util.Log;
 import android.util.Pair;
 import com.squareup.okhttp.OkHttpClient;
 import com.squareup.okhttp.OkUrlFactory;
-
 import org.fs.net.evoke.DownloadManager;
 import org.fs.net.evoke.data.HeadObject;
 import org.fs.net.evoke.data.PartObject;
@@ -16,17 +15,13 @@ import org.fs.net.evoke.th.NamedRunnable;
 import org.fs.net.evoke.util.LogUtil;
 import org.fs.net.evoke.util.StringUtility;
 import org.fs.net.evoke.util.Util;
-
 import java.io.File;
-import java.io.IOException;
 import java.net.HttpURLConnection;
-import java.net.ProtocolException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -62,11 +57,9 @@ public class HeadRequest extends NamedRunnable {
     private long downloadedSoFar;
     private long total;
     
-    //inner concurrent part 
     private final ExecutorService         executorService;
     private final Map<Integer, Future<?>> cancelable;
      
-    //buffer for 1 mb used for invoking streams 
     private final static long MAX_BUFFER = 1024 * 1024;
     
     public HeadRequest(final File base, final HeadCallback callback, final RequestObject requestObject) {
@@ -77,7 +70,7 @@ public class HeadRequest extends NamedRunnable {
         this.requestObject = requestObject;
         
         throwIfUrlNotValid();        
-        executorService = new ThreadPoolExecutor(0, Integer.MAX_VALUE, (connectionTimeout / 1000), TimeUnit.SECONDS,
+        executorService = new ThreadPoolExecutor(0, Integer.MAX_VALUE, 25, TimeUnit.SECONDS,
                 new LinkedBlockingQueue<Runnable>(), Util.threadFactory(String.format("-P %s", getName()), false));
         cancelable = new HashMap<>();
     }

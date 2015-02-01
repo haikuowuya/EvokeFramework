@@ -10,7 +10,6 @@ import org.fs.net.evoke.data.PartObject;
 import org.fs.net.evoke.listener.PartCallback;
 import org.fs.net.evoke.th.NamedRunnable;
 import org.fs.net.evoke.util.LogUtil;
-import org.fs.net.evoke.util.Util;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.FileOutputStream;

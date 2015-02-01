@@ -1,7 +1,6 @@
 package org.fs.net;
 
 import android.app.Activity;
-import android.net.Uri;
 import android.os.Bundle;
 import android.widget.ImageView;
 
