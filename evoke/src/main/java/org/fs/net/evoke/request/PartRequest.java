@@ -38,7 +38,7 @@ public class PartRequest extends NamedRunnable {
 
     private final static Pair<String, String> userAgent = new Pair<>("User-Agent", "(evoke/1.0) Android OS");
     
-    private final static int MAX_BUFFER = 1024 * 1024;
+    private final static int MAX_BUFFER = 1024 * 128;
     
     private final static String METHOD = "GET";
     private final static String RANGES = "Range";
@@ -142,6 +142,7 @@ public class PartRequest extends NamedRunnable {
                 is.close();
                 fos.flush();
                 fos.close();
+
                 callback.onPartCompleted(connection.getContentLength(), hashCode());
             }
             else {

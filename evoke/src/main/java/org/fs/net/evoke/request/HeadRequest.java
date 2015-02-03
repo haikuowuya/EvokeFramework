@@ -57,10 +57,12 @@ public class HeadRequest extends NamedRunnable {
     private long downloadedSoFar;
     private long total;
     
+    private String name;
+    
     private final ExecutorService         executorService;
     private final Map<Integer, Future<?>> cancelable;
      
-    private final static long MAX_BUFFER = 1024 * 1024;
+    private final static long MAX_BUFFER = 1024 * 128;
     
     public HeadRequest(final File base, final HeadCallback callback, final RequestObject requestObject) {
         super("-H %s", requestObject.toString());
@@ -164,9 +166,31 @@ public class HeadRequest extends NamedRunnable {
      * Gets file name from url string if there is. 
      * @return
      */
+    private String getName(String contentType) {
+        if(name == null) {
+            Uri uri = Uri.parse(urlString);
+            String n = uri.getLastPathSegment();
+            int ext = n.lastIndexOf('.');
+            if(ext == -1) {
+                ext = contentType.lastIndexOf('/');
+                if(ext != -1) {
+                    //append extension from contentType
+                    name = String.format("%s.%s", n, contentType.substring(ext + 1));
+                }
+            } else {
+                //it has extension in url
+                name = n;
+            }
+        }
+        return name;
+    }
+
+    /**
+     * Gets file name from url string if there is.  
+     * @return
+     */
     private String getName() {
-        Uri uri = Uri.parse(urlString);
-        return uri.getLastPathSegment();
+        return name;        
     }
 
     /**
@@ -211,26 +235,40 @@ public class HeadRequest extends NamedRunnable {
                 String serverSupportsPartialDownloads = connection.getHeaderField("Accept-Ranges");
                 if(!StringUtility.isNullOrEmpty(serverSupportsPartialDownloads)
                         && "bytes".equalsIgnoreCase(serverSupportsPartialDownloads)) {
+                    
+                    String name = getName(connection.getContentType());
+                    
                     HeadObject.Builder builder = new HeadObject.Builder();
                     builder.contentType(connection.getContentType())
-                           .name(getName())
+                           .name(name)
                            .length(connection.getContentLength())
                            .remote(urlString);
                     HeadObject headObject = builder.build();
-                    File file = new File(base, getName());
+                    
+                    File file = new File(base, name);
                     if (file.exists()) {
                         boolean alreadyDownloaded = connection.getContentLength() == file.length()
                                                  || requestObject.getLimit() == file.length();
                         if (alreadyDownloaded) {
                             callback.onComplete(hashCode(), file);
                         } else {
-                            startWithParts(share(headObject, file.length(), requestObject.getLimit()));
+                            
+                            long limit = requestObject.getLimit() > 0 
+                                    ? requestObject.getLimit() 
+                                    : connection.getContentLength();
+                            
+                            startWithParts(share(headObject, file.length(), limit));
                             total = connection.getContentLength();
                             downloadedSoFar = file.length();
                             callback.onProgress(hashCode(), downloadedSoFar, total);
                         }
                     } else {
-                        startWithParts(share(headObject, 0, requestObject.getLimit()));
+
+                        long limit = requestObject.getLimit() > 0
+                                ? requestObject.getLimit()
+                                : connection.getContentLength();
+                        
+                        startWithParts(share(headObject, 0, limit));
                         total = connection.getContentLength();
                         downloadedSoFar = 0;
                         callback.onProgress(hashCode(), downloadedSoFar, total);
@@ -307,25 +345,32 @@ public class HeadRequest extends NamedRunnable {
                 callback.onError(HeadRequest.this.hashCode(), requestObject.getUrlString(), DownloadManager.ERROR_PART_UNKNOWN);
             }
             else {
+                downloadedSoFar += size;//append it.
                 callback.onProgress(HeadRequest.this.hashCode(), downloadedSoFar, total);
                 if (downloadedSoFar == total) {
-                    if(requestObject.getMoveTo() != null) {
+                    File destination = requestObject.getMoveTo();
+                    if(destination != null) {
                         File cache = new File(base, getName());
-                        boolean moved = cache.renameTo(requestObject.getMoveTo());
+                        boolean moved = Util.move(cache, destination);
                         if(!moved) {
-                            moved = Util.move(cache, requestObject.getMoveTo());
+                            moved = cache.renameTo(destination);
                             if(!moved) {
                                 throw new IllegalArgumentException("cant move file to destination.");
                             } else {
-                                callback.onComplete(HeadRequest.this.hashCode(), requestObject.getMoveTo());
+                                callback.onComplete(HeadRequest.this.hashCode(), destination);
                             }
+                        }
+                        else {
+                            callback.onComplete(HeadRequest.this.hashCode(), destination);
                         }
                     } else {
                         callback.onComplete(HeadRequest.this.hashCode(), new File(base, getName()));
                     }
                 }
             }
-            cancelable.remove(id);        
+            //it might not be cancelled. quit it when we are done.
+            Future<?> future = cancelable.remove(id);
+            future.cancel(true);
         }
     };
 }

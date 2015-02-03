@@ -1,9 +1,7 @@
 package org.fs.net.evoke.data;
 
 import android.net.Uri;
-
 import org.fs.net.evoke.util.StringUtility;
-
 import java.io.File;
 
 /**
@@ -52,7 +50,7 @@ public final class RequestObject {
         return getClass().getSimpleName() + " {" +
                 urlString                 + ","  +
                 hashCode()                + ","  +
-                moveTo.toString()         + ","  +
+                (moveTo == null ? "" : moveTo.toString()) + ","  +
                 limit                     + " }";
     }
 
