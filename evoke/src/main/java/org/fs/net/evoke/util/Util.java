@@ -3,7 +3,10 @@ package org.fs.net.evoke.util;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.concurrent.ThreadFactory;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 /**
  * Created by Fatih on 28/01/15.
@@ -55,6 +58,58 @@ public final class Util {
             exp.printStackTrace();   
         }        
         return false;
+    }
+
+    /**
+     * Zip files will be extracted this way.
+     * @param source
+     * @param destination
+     */
+    public static void extract(File source, File destination) {
+        FileInputStream     in  = null;
+        ZipInputStream      zin = null;
+        FileOutputStream    out = null;
+        try {
+            in = new FileInputStream(source);
+            zin = new ZipInputStream(in);
+            ZipEntry entry;
+            while ((entry = zin.getNextEntry()) != null) {
+                File file = new File(destination, entry.getName());
+                if(entry.isDirectory()) {
+                    file.mkdirs();
+                } 
+                else {
+                    File parent = file.getParentFile();
+                    if(!parent.exists()) {
+                        parent.mkdirs();
+                    }
+                    out = new FileOutputStream(file);
+                    byte[] buffer = new byte[8192];
+                    int seed;
+                    while ((seed = zin.read(buffer, 0, buffer.length)) != -1) {
+                        out.write(buffer, 0, seed);
+                    }
+                    out.close();
+                    out = null;
+                }
+            }
+        }
+        catch (IOException ioe) {
+            if(LogUtil.isLogEnabled()) {
+                ioe.printStackTrace();
+            }
+        }
+        finally {
+            try {
+                zin.close();
+                in.close();
+                out.close();
+            } catch (Exception e) {
+                if(LogUtil.isLogEnabled()) {
+                    e.printStackTrace();
+                }
+            }
+        }
     }
     
     /**

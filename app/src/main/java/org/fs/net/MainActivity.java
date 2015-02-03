@@ -10,7 +10,6 @@ import android.util.Log;
 import android.widget.ImageView;
 import org.fs.net.evoke.DownloadManager;
 import org.fs.net.evoke.data.RequestObject;
-
 import java.io.File;
 import java.net.URI;
 
@@ -19,7 +18,6 @@ import java.net.URI;
  * as org.fs.net.MainActivity
  */
 public class MainActivity extends Activity {
-
     
     private String urlString = "";
        

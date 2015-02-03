@@ -13,7 +13,7 @@ import java.util.List;
  */
 public final class Error implements Serializable, Cloneable {
 
-    public final static String TABLE_NAME       = "error";
+    public final static String TABLE_NAME           = "error";
     
     public final static String COLUMN_ID            = "id";
     public final static String COLUMN_DETAIL        = "detail";

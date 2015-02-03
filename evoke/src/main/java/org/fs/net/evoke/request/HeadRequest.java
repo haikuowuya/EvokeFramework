@@ -350,6 +350,11 @@ public class HeadRequest extends NamedRunnable {
                 if (downloadedSoFar == total) {
                     File destination = requestObject.getMoveTo();
                     if(destination != null) {
+                        //if the parent folder not exits then make it
+                        File parent = destination.getParentFile();
+                        if(!parent.exists()) {
+                            parent.mkdirs();
+                        }
                         File cache = new File(base, getName());
                         boolean moved = Util.move(cache, destination);
                         if(!moved) {
